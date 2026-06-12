@@ -1,0 +1,33 @@
+# ─────────────────────────────────────────────────────────────────
+# ReachBell — WordPress Plugin  ·  .gitignore
+# ─────────────────────────────────────────────────────────────────
+
+# ── Build artefacts (zips shipped to WordPress.org) ──────────────
+*.zip
+
+# ── Dependencies (if a build pipeline is added later) ────────────
+/node_modules
+/vendor
+
+# ── Local WP test environment ────────────────────────────────────
+wp-content/
+wordpress/
+.wp-env.json
+
+# ── Environment / secrets ────────────────────────────────────────
+.env
+.env.local
+
+# ── Logs ─────────────────────────────────────────────────────────
+*.log
+
+# ── OS / editor ──────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# ── PHP tooling caches ───────────────────────────────────────────
+.phpunit.result.cache
+/coverage
