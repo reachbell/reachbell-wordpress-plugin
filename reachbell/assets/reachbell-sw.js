@@ -84,6 +84,7 @@ self.addEventListener('push', function (event) {
       subscriberId: data.subscriberId,
       actions:      data.actions || [],
       analyticsUrl: data.analyticsUrl || '',
+      token:        data.token || '',
     },
     requireInteraction: notifActions.length > 0,
     actions: notifActions,
@@ -109,6 +110,7 @@ self.addEventListener('push', function (event) {
             body: JSON.stringify({
               campaignId: data.campaignId,
               subscriberId: data.subscriberId,
+              token: data.token || '',
             }),
             keepalive: true,
           }).catch(function () { /* best-effort */ });
@@ -146,7 +148,7 @@ self.addEventListener('notificationclick', function (event) {
         return fetch(url, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ campaignId: campaignId, subscriberId: subscriberId, action: event.action || 'main' }),
+          body:    JSON.stringify({ campaignId: campaignId, subscriberId: subscriberId, token: clickData.token || '', action: event.action || 'main' }),
           keepalive: true,
         });
       }).catch(function (err) {
