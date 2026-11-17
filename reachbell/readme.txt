@@ -47,8 +47,8 @@ Pvt Ltd.
   and the featured image URL are sent to `https://api.reachbell.com/campaigns/server`
   with your secret key, from your server via wp-cron.
 
-If you change the API URL setting, the same data goes to that address
-instead.
+No other address is contacted, unless a developer points the plugin at a
+different ReachBell API with the `REACHBELL_API_URL` constant (see the FAQ).
 
 ReachBell terms of service: https://reachbell.com/terms
 ReachBell privacy policy: https://reachbell.com/privacy
@@ -78,6 +78,12 @@ your pages. The public key (`rb_live_…`) stays in the API Key field and is
 only used by the browser SDK. The settings page shows the result of the last
 notification.
 
+= Can I point the plugin at a staging API? =
+
+Yes, for testing. Add `define('REACHBELL_API_URL', 'https://staging-api.example.com');`
+to `wp-config.php`. Without it the plugin always uses `https://api.reachbell.com`,
+so most sites never need this.
+
 = Does this plugin work on multisite? =
 
 Yes for single-site activations. Network-wide activation is on the roadmap.
@@ -97,6 +103,8 @@ your settings.
 * Fix: `/reachbell-sw.js` was redirected to `/reachbell-sw.js/` on sites
   with pretty permalinks, so browsers could not register the service worker.
 * Requires WordPress 6.0 or later; tested up to 7.1.
+* Removed the API URL setting: the plugin always uses `https://api.reachbell.com`.
+  Developers can still override it with the `REACHBELL_API_URL` constant.
 
 = 1.0.2 =
 * Bundle ReachBell SDK 1.0.10: the opt-in prompt now stays on screen in every

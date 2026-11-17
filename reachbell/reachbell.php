@@ -20,6 +20,7 @@ define('REACHBELL_SW_RULE', '^reachbell-sw\\.js$');
 define('REACHBELL_PATH', plugin_dir_path(__FILE__));
 define('REACHBELL_URL',  plugin_dir_url(__FILE__));
 define('REACHBELL_SW_QUERY_VAR', 'reachbell_sw');
+define('REACHBELL_DEFAULT_API_URL', 'https://api.reachbell.com');
 
 /* ─── Settings page ────────────────────────────────────────────── */
 
@@ -44,11 +45,6 @@ function reachbell_register_settings() {
         'sanitize_callback' => 'sanitize_text_field',
         'default'           => '',
     ]);
-    register_setting('reachbell', 'reachbell_api_url', [
-        'type'              => 'string',
-        'sanitize_callback' => 'esc_url_raw', // strips javascript:, data:, etc.
-        'default'           => 'https://api.reachbell.com',
-    ]);
     register_setting('reachbell', 'reachbell_auto_prompt', [
         'type'              => 'boolean',
         'sanitize_callback' => 'rest_sanitize_boolean',
@@ -66,6 +62,12 @@ function reachbell_register_settings() {
     ]);
 }
 add_action('admin_init', 'reachbell_register_settings');
+
+function reachbell_api_url() {
+    $url = defined('REACHBELL_API_URL') ? (string) REACHBELL_API_URL : REACHBELL_DEFAULT_API_URL;
+    $url = esc_url_raw($url, ['https', 'http']);
+    return untrailingslashit($url ? $url : REACHBELL_DEFAULT_API_URL);
+}
 
 function reachbell_sanitize_secret_key($value) {
     $value = trim(sanitize_text_field((string) $value));
@@ -110,14 +112,6 @@ function reachbell_settings_page() {
                         <p class="description">
                             <?php esc_html_e('Find this in your ReachBell dashboard → Settings → API key.', 'reachbell'); ?>
                         </p>
-                    </td>
-                </tr>
-                <tr>
-                    <th><label for="reachbell_api_url"><?php esc_html_e('API URL', 'reachbell'); ?></label></th>
-                    <td>
-                        <input type="text" name="reachbell_api_url" id="reachbell_api_url"
-                            value="<?php echo esc_attr(get_option('reachbell_api_url', 'https://api.reachbell.com')); ?>"
-                            class="regular-text" />
                     </td>
                 </tr>
                 <tr>
@@ -256,9 +250,6 @@ function reachbell_enqueue_sdk() {
     $api_key = get_option('reachbell_api_key');
     if (!$api_key) return;
 
-    $api_url     = untrailingslashit(esc_url_raw(get_option('reachbell_api_url', 'https://api.reachbell.com')));
-    $auto_prompt = get_option('reachbell_auto_prompt') ? 'true' : 'false';
-
     wp_enqueue_script(
         'reachbell-sdk',
         REACHBELL_URL . 'assets/reachbell.js',
@@ -267,14 +258,18 @@ function reachbell_enqueue_sdk() {
         true
     );
 
-    $inline = sprintf(
-        "(function(){if(!window.ReachBell)return;window.ReachBell.init({apiKey:'%s',apiUrl:'%s',swPath:'%s',autoPrompt:%s});})();",
-        esc_js($api_key),
-        esc_js($api_url),
-        esc_js(reachbell_sw_path()),
-        $auto_prompt
+    $config = [
+        'apiKey'     => (string) $api_key,
+        'swPath'     => reachbell_sw_path(),
+        'autoPrompt' => (bool) get_option('reachbell_auto_prompt'),
+    ];
+    if (defined('REACHBELL_API_URL')) {
+        $config['apiUrl'] = reachbell_api_url();
+    }
+    wp_add_inline_script(
+        'reachbell-sdk',
+        'if(window.ReachBell){window.ReachBell.init(' . wp_json_encode($config) . ');}'
     );
-    wp_add_inline_script('reachbell-sdk', $inline);
 }
 add_action('wp_enqueue_scripts', 'reachbell_enqueue_sdk');
 
@@ -311,7 +306,7 @@ function reachbell_send_post_notification($post_id) {
     if (!$post || $post->post_status !== 'publish') return;
 
     $secret_key = get_option('reachbell_secret_key');
-    $api_url    = untrailingslashit(get_option('reachbell_api_url', 'https://api.reachbell.com'));
+    $api_url    = reachbell_api_url();
     if (!$secret_key) return;
 
     $title = wp_strip_all_tags($post->post_title);
