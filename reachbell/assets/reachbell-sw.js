@@ -99,6 +99,20 @@ self.addEventListener('push', function (event) {
   event.waitUntil(
     self.registration.showNotification(data.title || 'New Message', options)
       .then(function () {
+        self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (list) {
+          list.forEach(function (client) {
+            client.postMessage({
+              type: 'REACHBELL_NOTIFICATION',
+              notification: {
+                id: data.campaignId ? 'nh_' + data.campaignId : undefined,
+                title: data.title || 'New Message',
+                body: data.body || '',
+                url: data.clickUrl || data.url || '',
+                icon: data.iconUrl || '',
+              },
+            });
+          });
+        }).catch(function () {});
         // Fire-and-forget impression ping AFTER the OS has rendered.
         if (!data.campaignId || !data.subscriberId) return;
         return loadApiUrl().then(function (apiUrl) {

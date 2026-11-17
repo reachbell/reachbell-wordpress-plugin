@@ -3,7 +3,7 @@
  * Plugin Name: ReachBell
  * Plugin URI:  https://reachbell.com/wordpress
  * Description: Send push notifications and email campaigns to your WordPress visitors via ReachBell.
- * Version:     1.0.1
+ * Version:     1.0.2
  * Author:      DotSpheres Technologies Pvt Ltd
  * Author URI:  https://reachbell.com
  * License:     GPL-2.0+
@@ -16,7 +16,8 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('REACHBELL_VERSION', '1.0.1');
+define('REACHBELL_VERSION', '1.0.2');
+define('REACHBELL_SW_RULE', '^reachbell-sw\\.js$');
 define('REACHBELL_PATH', plugin_dir_path(__FILE__));
 define('REACHBELL_URL',  plugin_dir_url(__FILE__));
 define('REACHBELL_SW_QUERY_VAR', 'reachbell_sw');
@@ -140,7 +141,7 @@ function reachbell_settings_page() {
  * must bump REACHBELL_VERSION and re-flush via a one-off migration.
  */
 function reachbell_register_sw_route() {
-    add_rewrite_rule('^reachbell-sw\.js$', 'index.php?' . REACHBELL_SW_QUERY_VAR . '=1', 'top');
+    add_rewrite_rule(REACHBELL_SW_RULE, 'index.php?' . REACHBELL_SW_QUERY_VAR . '=1', 'top');
 }
 add_action('init', 'reachbell_register_sw_route');
 
@@ -149,6 +150,13 @@ function reachbell_query_vars($vars) {
     return $vars;
 }
 add_filter('query_vars', 'reachbell_query_vars');
+
+function reachbell_sw_path() {
+    $url = get_option('permalink_structure')
+        ? home_url('/reachbell-sw.js')
+        : add_query_arg(REACHBELL_SW_QUERY_VAR, '1', home_url('/'));
+    return wp_make_link_relative($url);
+}
 
 function reachbell_serve_sw() {
     if (!get_query_var(REACHBELL_SW_QUERY_VAR)) return;
@@ -161,7 +169,8 @@ function reachbell_serve_sw() {
     // Required so the SW can claim site-root scope despite being served
     // from a plugin path internally.
     header('Content-Type: application/javascript; charset=utf-8');
-    header('Service-Worker-Allowed: /');
+    $home_path = wp_parse_url(home_url('/'), PHP_URL_PATH);
+    header('Service-Worker-Allowed: ' . ($home_path ? $home_path : '/'));
     // 1 day cache — the SW updates itself via the standard browser
     // update-check on next page load when this file's bytes change.
     header('Cache-Control: public, max-age=86400');
@@ -181,7 +190,7 @@ function reachbell_enqueue_sdk() {
     $api_key = get_option('reachbell_api_key');
     if (!$api_key) return;
 
-    $api_url     = esc_url(get_option('reachbell_api_url', 'https://api.reachbell.com'));
+    $api_url     = untrailingslashit(esc_url_raw(get_option('reachbell_api_url', 'https://api.reachbell.com')));
     $auto_prompt = get_option('reachbell_auto_prompt') ? 'true' : 'false';
 
     wp_enqueue_script(
@@ -193,9 +202,10 @@ function reachbell_enqueue_sdk() {
     );
 
     $inline = sprintf(
-        "(function(){if(!window.ReachBell)return;window.ReachBell.init({apiKey:'%s',apiUrl:'%s',autoPrompt:%s});})();",
+        "(function(){if(!window.ReachBell)return;window.ReachBell.init({apiKey:'%s',apiUrl:'%s',swPath:'%s',autoPrompt:%s});})();",
         esc_js($api_key),
         esc_js($api_url),
+        esc_js(reachbell_sw_path()),
         $auto_prompt
     );
     wp_add_inline_script('reachbell-sdk', $inline);
@@ -288,6 +298,10 @@ register_activation_hook(__FILE__, 'reachbell_activate');
 function reachbell_deactivate() {
     // Drop the SW rewrite and clear any queued push-on-publish events
     // so a deactivated plugin doesn't keep firing API calls.
+    global $wp_rewrite;
+    if (isset($wp_rewrite->extra_rules_top[REACHBELL_SW_RULE])) {
+        unset($wp_rewrite->extra_rules_top[REACHBELL_SW_RULE]);
+    }
     flush_rewrite_rules();
     wp_clear_scheduled_hook('reachbell_send_post_notification');
 }

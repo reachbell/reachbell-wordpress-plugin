@@ -4,7 +4,7 @@ Tags: push notifications, web push, notifications, marketing, email
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.0.1
+Stable tag: 1.0.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -32,10 +32,12 @@ Features:
 2. Activate the plugin in WordPress
 3. Go to Settings → ReachBell, paste your API key from the [dashboard](https://app.reachbell.com)
 4. Save — the SDK loads automatically on every page, and a service worker is
-   served at `/reachbell-sw.js` with `Service-Worker-Allowed: /` so push
-   notifications can target the whole site.
+   served from your site's home path (`/reachbell-sw.js`, or
+   `/blog/reachbell-sw.js` when WordPress lives in a subfolder) so push
+   notifications can target the whole site. With plain permalinks the plugin
+   serves it from `/?reachbell_sw=1` instead.
 
-If you've changed your permalink structure and the SW URL returns 404, visit
+If the service worker URL returns 404 after changing permalinks, visit
 Settings → Permalinks and click "Save Changes" once to refresh rewrite rules.
 
 == Frequently Asked Questions ==
@@ -51,6 +53,16 @@ WordPress.org guidelines. Deactivating instead of uninstalling preserves
 your settings.
 
 == Changelog ==
+
+= 1.0.2 =
+* Bundle ReachBell SDK 1.0.10: the opt-in prompt now stays on screen in every
+  position, honours the dashboard's frequency, delay and scroll settings, and
+  waits for a click before showing the browser's native prompt.
+* In-page widgets only appear when they are switched on in the dashboard.
+* Returning subscribers are re-synced automatically after a key change.
+* Delivery and click analytics now reach the ReachBell API.
+* The service worker works on subfolder installs and with plain permalinks.
+* Deactivating the plugin removes its rewrite rule.
 
 = 1.0.1 =
 * Bundle the ReachBell SDK inside the plugin (previously enqueued from a
