@@ -9,8 +9,7 @@
  * License:     GPL-2.0+
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: reachbell
- * Domain Path: /languages
- * Requires at least: 5.0
+ * Requires at least: 6.0
  * Requires PHP: 7.4
  */
 
@@ -21,13 +20,6 @@ define('REACHBELL_SW_RULE', '^reachbell-sw\\.js$');
 define('REACHBELL_PATH', plugin_dir_path(__FILE__));
 define('REACHBELL_URL',  plugin_dir_url(__FILE__));
 define('REACHBELL_SW_QUERY_VAR', 'reachbell_sw');
-
-/* ─── i18n ─────────────────────────────────────────────────────── */
-
-function reachbell_load_textdomain() {
-    load_plugin_textdomain('reachbell', false, dirname(plugin_basename(__FILE__)) . '/languages');
-}
-add_action('plugins_loaded', 'reachbell_load_textdomain');
 
 /* ─── Settings page ────────────────────────────────────────────── */
 
@@ -243,10 +235,15 @@ function reachbell_serve_sw() {
     // 1 day cache — the SW updates itself via the standard browser
     // update-check on next page load when this file's bytes change.
     header('Cache-Control: public, max-age=86400');
-    readfile($file);
+    global $wp_filesystem;
+    if (!function_exists('WP_Filesystem')) {
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+    }
+    WP_Filesystem();
+    echo $wp_filesystem->get_contents($file); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
     exit;
 }
-add_action('template_redirect', 'reachbell_serve_sw');
+add_action('template_redirect', 'reachbell_serve_sw', 0);
 
 /* ─── SDK enqueue ──────────────────────────────────────────────── */
 
@@ -320,7 +317,7 @@ function reachbell_send_post_notification($post_id) {
     $title = wp_strip_all_tags($post->post_title);
     // Render shortcodes + strip block delimiters so the push body reads as
     // prose, not as `<!-- wp:paragraph --> Hello [gallery] world`.
-    $rendered = apply_filters('the_content', $post->post_content);
+    $rendered = apply_filters('the_content', $post->post_content); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
     $plain    = wp_strip_all_tags(strip_shortcodes($rendered));
     $body     = wp_trim_words($plain, 22, '…');
     $url      = get_permalink($post);

@@ -1,8 +1,8 @@
 === ReachBell ===
 Contributors: dotspheres
 Tags: push notifications, web push, notifications, marketing, email
-Requires at least: 5.0
-Tested up to: 6.5
+Requires at least: 6.0
+Tested up to: 7.1
 Requires PHP: 7.4
 Stable tag: 1.0.3
 License: GPLv2 or later
@@ -25,6 +25,33 @@ Features:
 * Auto-notify on new post publish (runs asynchronously — never blocks the editor)
 * User identification & segmentation
 * Powered by [reachbell.com](https://reachbell.com)
+
+== External services ==
+
+This plugin connects to the ReachBell service (https://reachbell.com), which
+is required for it to work. ReachBell is provided by DotSpheres Technologies
+Pvt Ltd.
+
+* **Browser SDK (every page, once an API key is saved).** The bundled SDK
+  loads your project settings from `https://api.reachbell.com/projects/context`
+  using your public API key. When a visitor agrees to notifications, their
+  browser's push subscription (push endpoint and encryption keys) is sent to
+  `https://api.reachbell.com/subscribers`. Nothing is sent before the visitor
+  allows notifications, apart from loading the settings.
+* **Service worker (after a visitor subscribes).** When a notification is
+  shown or clicked, the campaign ID and subscriber ID are sent to
+  `https://api.reachbell.com/campaigns/analytics/` so you can see delivery and
+  click counts.
+* **Notify on publish (only if enabled and a secret key is saved).** When a
+  post is published, its title, a short excerpt, its URL, the site icon URL
+  and the featured image URL are sent to `https://api.reachbell.com/campaigns/server`
+  with your secret key, from your server via wp-cron.
+
+If you change the API URL setting, the same data goes to that address
+instead.
+
+ReachBell terms of service: https://reachbell.com/terms
+ReachBell privacy policy: https://reachbell.com/privacy
 
 == Installation ==
 
@@ -67,6 +94,9 @@ your settings.
 * "Notify subscribers on publish" now works: add your project secret key in
   Settings → ReachBell. Posts are sent through ReachBell's secret-key
   campaign endpoint, and the settings page shows the last result.
+* Fix: `/reachbell-sw.js` was redirected to `/reachbell-sw.js/` on sites
+  with pretty permalinks, so browsers could not register the service worker.
+* Requires WordPress 6.0 or later; tested up to 7.1.
 
 = 1.0.2 =
 * Bundle ReachBell SDK 1.0.10: the opt-in prompt now stays on screen in every
@@ -93,3 +123,8 @@ your settings.
 
 = 1.0.0 =
 * Initial release.
+
+== Credits ==
+
+Bundles the ReachBell browser SDK (`assets/reachbell.js`, MIT licence,
+source at https://github.com/reachbell/reachbell-sdk).
