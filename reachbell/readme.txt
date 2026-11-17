@@ -4,7 +4,7 @@ Tags: push notifications, web push, notifications, marketing, email
 Requires at least: 5.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.0.2
+Stable tag: 1.0.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -15,8 +15,8 @@ Send web push notifications and email campaigns to your WordPress visitors with 
 ReachBell lets you re-engage your visitors with real-time push notifications and
 beautifully designed email campaigns — directly from your ReachBell dashboard.
 
-Install the plugin, paste your API key, and you're done. Every new post can
-automatically send a push to subscribers.
+Install the plugin, paste your API key, and you're done. Add your secret key
+too and every new post can automatically send a push to subscribers.
 
 Features:
 
@@ -42,6 +42,15 @@ Settings → Permalinks and click "Save Changes" once to refresh rewrite rules.
 
 == Frequently Asked Questions ==
 
+= Why does "Notify subscribers on publish" need a secret key? =
+
+Sending a campaign is a server-only action, so ReachBell requires your
+project's secret key (`rb_secret_…`) for it. The plugin keeps the secret key
+in your WordPress database, uses it only from wp-cron, and never adds it to
+your pages. The public key (`rb_live_…`) stays in the API Key field and is
+only used by the browser SDK. The settings page shows the result of the last
+notification.
+
 = Does this plugin work on multisite? =
 
 Yes for single-site activations. Network-wide activation is on the roadmap.
@@ -53,6 +62,11 @@ WordPress.org guidelines. Deactivating instead of uninstalling preserves
 your settings.
 
 == Changelog ==
+
+= 1.0.3 =
+* "Notify subscribers on publish" now works: add your project secret key in
+  Settings → ReachBell. Posts are sent through ReachBell's secret-key
+  campaign endpoint, and the settings page shows the last result.
 
 = 1.0.2 =
 * Bundle ReachBell SDK 1.0.10: the opt-in prompt now stays on screen in every

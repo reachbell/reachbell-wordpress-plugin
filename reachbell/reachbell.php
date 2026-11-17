@@ -3,7 +3,7 @@
  * Plugin Name: ReachBell
  * Plugin URI:  https://reachbell.com/wordpress
  * Description: Send push notifications and email campaigns to your WordPress visitors via ReachBell.
- * Version:     1.0.2
+ * Version:     1.0.3
  * Author:      DotSpheres Technologies Pvt Ltd
  * Author URI:  https://reachbell.com
  * License:     GPL-2.0+
@@ -16,7 +16,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('REACHBELL_VERSION', '1.0.2');
+define('REACHBELL_VERSION', '1.0.3');
 define('REACHBELL_SW_RULE', '^reachbell-sw\\.js$');
 define('REACHBELL_PATH', plugin_dir_path(__FILE__));
 define('REACHBELL_URL',  plugin_dir_url(__FILE__));
@@ -62,6 +62,11 @@ function reachbell_register_settings() {
         'sanitize_callback' => 'rest_sanitize_boolean',
         'default'           => false,
     ]);
+    register_setting('reachbell', 'reachbell_secret_key', [
+        'type'              => 'string',
+        'sanitize_callback' => 'reachbell_sanitize_secret_key',
+        'default'           => '',
+    ]);
     register_setting('reachbell', 'reachbell_notify_on_publish', [
         'type'              => 'boolean',
         'sanitize_callback' => 'rest_sanitize_boolean',
@@ -69,6 +74,33 @@ function reachbell_register_settings() {
     ]);
 }
 add_action('admin_init', 'reachbell_register_settings');
+
+function reachbell_sanitize_secret_key($value) {
+    $value = trim(sanitize_text_field((string) $value));
+    if ($value === '') {
+        return get_option('reachbell_secret_key', '');
+    }
+    if (strpos($value, 'rb_secret_') !== 0) {
+        add_settings_error(
+            'reachbell_secret_key',
+            'reachbell_secret_key_invalid',
+            __('The secret key must start with rb_secret_. The previous key was kept.', 'reachbell')
+        );
+        return get_option('reachbell_secret_key', '');
+    }
+    return $value;
+}
+
+function reachbell_clear_secret_key() {
+    if (!current_user_can('manage_options')) {
+        wp_die(esc_html__('You are not allowed to do this.', 'reachbell'));
+    }
+    check_admin_referer('reachbell_clear_secret_key');
+    delete_option('reachbell_secret_key');
+    wp_safe_redirect(admin_url('options-general.php?page=reachbell'));
+    exit;
+}
+add_action('admin_post_reachbell_clear_secret_key', 'reachbell_clear_secret_key');
 
 function reachbell_settings_page() {
     ?>
@@ -109,6 +141,25 @@ function reachbell_settings_page() {
                     </td>
                 </tr>
                 <tr>
+                    <th><label for="reachbell_secret_key"><?php esc_html_e('Secret key', 'reachbell'); ?></label></th>
+                    <td>
+                        <?php $reachbell_has_secret = (bool) get_option('reachbell_secret_key'); ?>
+                        <input type="password" name="reachbell_secret_key" id="reachbell_secret_key"
+                            value="" autocomplete="new-password" class="regular-text"
+                            placeholder="<?php echo esc_attr($reachbell_has_secret ? __('Saved — leave blank to keep it', 'reachbell') : 'rb_secret_…'); ?>" />
+                        <p class="description">
+                            <?php esc_html_e('Needed only for "Notify subscribers on publish". Find it in your ReachBell dashboard → Settings → API keys. It stays on this server and is never added to your pages.', 'reachbell'); ?>
+                        </p>
+                        <?php if ($reachbell_has_secret) : ?>
+                            <p>
+                                <a href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=reachbell_clear_secret_key'), 'reachbell_clear_secret_key')); ?>">
+                                    <?php esc_html_e('Remove saved secret key', 'reachbell'); ?>
+                                </a>
+                            </p>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+                <tr>
                     <th><?php esc_html_e('Notify subscribers on publish', 'reachbell'); ?></th>
                     <td>
                         <label>
@@ -118,6 +169,24 @@ function reachbell_settings_page() {
                                 <?php esc_html_e('Send a push notification when a new post goes live.', 'reachbell'); ?>
                             </span>
                         </label>
+                        <?php if (get_option('reachbell_notify_on_publish') && !get_option('reachbell_secret_key')) : ?>
+                            <p class="description" style="color:#b32d2e;">
+                                <?php esc_html_e('Add your secret key above — notifications are not sent without it.', 'reachbell'); ?>
+                            </p>
+                        <?php endif; ?>
+                        <?php $reachbell_last = get_option('reachbell_last_notify'); ?>
+                        <?php if (is_array($reachbell_last) && !empty($reachbell_last['message'])) : ?>
+                            <p class="description">
+                                <?php
+                                echo esc_html(sprintf(
+                                    /* translators: 1: date and time, 2: result message */
+                                    __('Last notification (%1$s): %2$s', 'reachbell'),
+                                    wp_date(get_option('date_format') . ' ' . get_option('time_format'), (int) $reachbell_last['time']),
+                                    $reachbell_last['message']
+                                ));
+                                ?>
+                            </p>
+                        <?php endif; ?>
                     </td>
                 </tr>
             </table>
@@ -228,7 +297,7 @@ function reachbell_notify_on_publish($new_status, $old_status, $post) {
     // Defense in depth — transition_post_status already filters revisions
     // out via post_type, but be explicit.
     if (wp_is_post_revision($post->ID) || wp_is_post_autosave($post->ID)) return;
-    if (!get_option('reachbell_api_key')) return;
+    if (!get_option('reachbell_secret_key')) return;
 
     // Cron the send onto the next request — non-blocking, auto-retried by
     // WP's cron infrastructure if the next request doesn't fire it.
@@ -237,17 +306,16 @@ function reachbell_notify_on_publish($new_status, $old_status, $post) {
 add_action('transition_post_status', 'reachbell_notify_on_publish', 10, 3);
 
 /**
- * Cron handler — fires the API request asynchronously. Falls back to a
- * non-blocking wp_remote_post if for any reason this runs in a request
- * context (it shouldn't; cron handles that for us).
+ * Cron handler — sends the post to the secret-key campaign endpoint and
+ * stores the outcome so the settings page can show the last result.
  */
 function reachbell_send_post_notification($post_id) {
     $post = get_post($post_id);
     if (!$post || $post->post_status !== 'publish') return;
 
-    $api_key = get_option('reachbell_api_key');
-    $api_url = get_option('reachbell_api_url', 'https://api.reachbell.com');
-    if (!$api_key) return;
+    $secret_key = get_option('reachbell_secret_key');
+    $api_url    = untrailingslashit(get_option('reachbell_api_url', 'https://api.reachbell.com'));
+    if (!$secret_key) return;
 
     $title = wp_strip_all_tags($post->post_title);
     // Render shortcodes + strip block delimiters so the push body reads as
@@ -257,10 +325,10 @@ function reachbell_send_post_notification($post_id) {
     $body     = wp_trim_words($plain, 22, '…');
     $url      = get_permalink($post);
 
-    wp_remote_post($api_url . '/campaigns', [
+    $response = wp_remote_post($api_url . '/campaigns/server', [
         'headers' => [
             'Content-Type' => 'application/json',
-            'x-api-key'    => $api_key,
+            'x-api-key'    => $secret_key,
         ],
         'body'    => wp_json_encode([
             'name'    => sprintf(
@@ -277,11 +345,33 @@ function reachbell_send_post_notification($post_id) {
             ],
             'segment' => new stdClass(),
         ]),
-        'timeout'  => 5,
-        // Even in the cron context, don't make the cron request stall on
-        // API latency. The response shape is informational only.
-        'blocking' => false,
+        'timeout'  => 15,
     ]);
+
+    if (is_wp_error($response)) {
+        $message = $response->get_error_message();
+    } else {
+        $code    = (int) wp_remote_retrieve_response_code($response);
+        $payload = json_decode(wp_remote_retrieve_body($response), true);
+        if ($code >= 200 && $code < 300) {
+            $message = sprintf(
+                /* translators: %s is the post title */
+                __('sent for "%s"', 'reachbell'),
+                $title
+            );
+        } else {
+            $detail  = is_array($payload) && isset($payload['message'])
+                ? (is_array($payload['message']) ? implode('; ', $payload['message']) : (string) $payload['message'])
+                : '';
+            $message = sprintf(
+                /* translators: 1: HTTP status code, 2: error detail */
+                __('failed (HTTP %1$d) %2$s', 'reachbell'),
+                $code,
+                $detail
+            );
+        }
+    }
+    update_option('reachbell_last_notify', ['time' => time(), 'message' => $message], false);
 }
 add_action('reachbell_send_post_notification', 'reachbell_send_post_notification', 10, 1);
 
