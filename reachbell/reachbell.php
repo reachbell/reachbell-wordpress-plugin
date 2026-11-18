@@ -3,7 +3,7 @@
  * Plugin Name: ReachBell
  * Plugin URI:  https://reachbell.com/wordpress
  * Description: Send push notifications and email campaigns to your WordPress visitors via ReachBell.
- * Version:     1.0.3
+ * Version:     1.0.4
  * Author:      DotSpheres Technologies Pvt Ltd
  * Author URI:  https://reachbell.com
  * License:     GPL-2.0+
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('REACHBELL_VERSION', '1.0.3');
+define('REACHBELL_VERSION', '1.0.4');
 define('REACHBELL_SW_RULE', '^reachbell-sw\\.js$');
 define('REACHBELL_PATH', plugin_dir_path(__FILE__));
 define('REACHBELL_URL',  plugin_dir_url(__FILE__));

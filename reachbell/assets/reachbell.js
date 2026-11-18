@@ -164,6 +164,18 @@ var ReachBellBundle = (function (exports) {
             return input;
         return fallback;
     }
+    function nativePromptNeedsGesture(userAgent, hasUserAgentData = false) {
+        const ua = userAgent || '';
+        if (/iPhone|iPad|iPod|FxiOS|CriOS|EdgiOS/.test(ua))
+            return true;
+        if (/Firefox\//.test(ua))
+            return true;
+        if (hasUserAgentData)
+            return false;
+        if (/Chrome\/|Chromium\/|Edg\//.test(ua))
+            return false;
+        return true;
+    }
     function normalizeApiUrl(raw) {
         return raw.trim().replace(/\/+$/, '');
     }
@@ -342,7 +354,10 @@ var ReachBellBundle = (function (exports) {
                     return;
                 void this.prompt();
             };
-            const trigger = cfg.type === 'native' ? () => this.armAutoPromptOnGesture(fire) : fire;
+            const needsGesture = cfg.type === 'native' &&
+                (typeof navigator === 'undefined' ||
+                    nativePromptNeedsGesture(navigator.userAgent, !!navigator.userAgentData));
+            const trigger = needsGesture ? () => this.armAutoPromptOnGesture(fire) : fire;
             this.afterPromptTriggers(cfg, trigger);
         }
         afterPromptTriggers(cfg, run) {
@@ -1929,6 +1944,7 @@ var ReachBellBundle = (function (exports) {
     exports.ReachBell = ReachBell;
     exports.default = ReachBell;
     exports.escapeHtml = escapeHtml;
+    exports.nativePromptNeedsGesture = nativePromptNeedsGesture;
     exports.normalizeApiUrl = normalizeApiUrl;
     exports.promptCapAllows = promptCapAllows;
     exports.promptFrequencyAllows = promptFrequencyAllows;

@@ -4,7 +4,7 @@ Tags: push notifications, web push, notifications, marketing, email
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.0.3
+Stable tag: 1.0.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -95,6 +95,12 @@ WordPress.org guidelines. Deactivating instead of uninstalling preserves
 your settings.
 
 == Changelog ==
+
+= 1.0.4 =
+* Bundle ReachBell SDK 1.0.12: in Chrome and Edge the browser's native
+  permission prompt now appears once the dashboard delay has passed, instead
+  of waiting for the visitor's next click or page. Safari and Firefox still
+  need a click, so there it appears on the first click after the delay.
 
 = 1.0.3 =
 * "Notify subscribers on publish" now works: add your project secret key in
