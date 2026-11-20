@@ -1,14 +1,14 @@
 === ReachBell ===
 Contributors: reachbell
-Tags: push notifications, web push, notifications, marketing, email
+Tags: push notifications, web push, woocommerce, abandoned cart, back in stock
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.0.4
+Stable tag: 1.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Send web push notifications and email campaigns to your WordPress visitors with ReachBell.
+Web push for WordPress and WooCommerce: new-post alerts, order updates, abandoned-cart reminders and back-in-stock alerts.
 
 == Description ==
 
@@ -24,6 +24,22 @@ Features:
 * Visual opt-in prompt designer (configure from the dashboard)
 * Auto-notify on new post publish (runs asynchronously — never blocks the editor)
 * User identification & segmentation
+
+WooCommerce (when WooCommerce is active; each feature is off until you turn it on):
+
+* Order updates — push the shopper when their order is confirmed, completed,
+  refunded, cancelled, put on hold, or moves to a custom status
+* Abandoned-cart reminders — push a subscribed shopper who leaves items in
+  their cart, after a delay you choose (15 minutes to 2 days)
+* Back-in-stock waitlist — a "Notify me" button on out-of-stock products;
+  everyone who tapped it gets a push when the product is back
+* Price-drop alerts — push shoppers who added a product to their cart when
+  its price goes down (at most once a day per product)
+* Store events — order, cart and stock events are sent to ReachBell so
+  dashboard automations can react to them
+* `reachbell_send()` helper for developers who want to send their own pushes
+* Compatible with High-Performance Order Storage and the block-based cart
+  and checkout
 * Powered by [reachbell.com](https://reachbell.com)
 
 == External services ==
@@ -46,6 +62,23 @@ Pvt Ltd.
   post is published, its title, a short excerpt, its URL, the site icon URL
   and the featured image URL are sent to `https://api.reachbell.com/campaigns/server`
   with your secret key, from your server via wp-cron.
+
+* **WooCommerce features (only if WooCommerce is active, a secret key is
+  saved and the feature is turned on).** From your server via wp-cron:
+  order updates send the order number, status message and order link to
+  `https://api.reachbell.com/transactional/send`; abandoned-cart reminders
+  send the first product's name and image and the cart link to the same
+  endpoint; back-in-stock and price-drop alerts send the product name, price,
+  link and image to `https://api.reachbell.com/campaigns/server`. With "Send
+  store events" on, order and cart events (order number, total, currency and
+  cart product names and quantities) go to `https://api.reachbell.com/events`.
+  Shoppers are identified to ReachBell by an ID the plugin creates
+  (`wc_customer_<user ID>` or a random `wc_guest_…` ID), never by email
+  address. In the browser, the bundled SDK sends that ID and product tags
+  (`wc_cart_<product ID>`, `wc_waitlist_<product ID>_<n>`) to
+  `https://api.reachbell.com/subscribers/identify` and
+  `https://api.reachbell.com/subscribers/tag`, only for visitors who have
+  allowed notifications.
 
 No other address is contacted, unless a developer points the plugin at a
 different ReachBell API with the `REACHBELL_API_URL` constant (see the FAQ).
@@ -78,6 +111,30 @@ your pages. The public key (`rb_live_…`) stays in the API Key field and is
 only used by the browser SDK. The settings page shows the result of the last
 notification.
 
+= Do I need a separate plugin for WooCommerce? =
+
+No. With WooCommerce active, Settings → ReachBell shows a WooCommerce
+section. Add your secret key, tick the features you want, and save.
+
+= Which plan do the WooCommerce features need? =
+
+Back-in-stock and price-drop alerts and store events work on every plan.
+Order updates and abandoned-cart reminders use the transactional API, which
+is on the Starter plan and above. The settings page shows the result of the
+last store message, so a plan error is visible there.
+
+= How does the plugin know which shopper to notify? =
+
+Logged-in customers are identified as `wc_customer_<user ID>`. Guests get a
+random ID stored in their WooCommerce session, which is linked to their
+order at checkout. Only shoppers who have allowed notifications can be
+reached.
+
+= Can I change the order update wording? =
+
+Yes. Use the `reachbell_wc_order_message` filter, which receives
+`[ $title, $body ]`, the order and the new status.
+
 = Can I point the plugin at a staging API? =
 
 Yes, for testing. Add `define('REACHBELL_API_URL', 'https://staging-api.example.com');`
@@ -95,6 +152,14 @@ WordPress.org guidelines. Deactivating instead of uninstalling preserves
 your settings.
 
 == Changelog ==
+
+= 1.1.0 =
+* New WooCommerce section in Settings → ReachBell: order updates,
+  abandoned-cart reminders, a back-in-stock waitlist, price-drop alerts and
+  store events for dashboard automations.
+* New `reachbell_send()` helper and `reachbell_wc_order_message` filter.
+* Declares compatibility with WooCommerce High-Performance Order Storage and
+  the block-based cart and checkout.
 
 = 1.0.4 =
 * Bundle ReachBell SDK 1.0.12: in Chrome and Edge the browser's native

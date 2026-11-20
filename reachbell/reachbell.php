@@ -3,7 +3,7 @@
  * Plugin Name: ReachBell
  * Plugin URI:  https://reachbell.com/wordpress
  * Description: Send push notifications and email campaigns to your WordPress visitors via ReachBell.
- * Version:     1.0.4
+ * Version:     1.1.0
  * Author:      DotSpheres Technologies Pvt Ltd
  * Author URI:  https://reachbell.com
  * License:     GPL-2.0+
@@ -11,16 +11,21 @@
  * Text Domain: reachbell
  * Requires at least: 6.0
  * Requires PHP: 7.4
+ * WC requires at least: 7.0
+ * WC tested up to: 11.3
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('REACHBELL_VERSION', '1.0.4');
+define('REACHBELL_VERSION', '1.1.0');
+define('REACHBELL_FILE', __FILE__);
 define('REACHBELL_SW_RULE', '^reachbell-sw\\.js$');
 define('REACHBELL_PATH', plugin_dir_path(__FILE__));
 define('REACHBELL_URL',  plugin_dir_url(__FILE__));
 define('REACHBELL_SW_QUERY_VAR', 'reachbell_sw');
 define('REACHBELL_DEFAULT_API_URL', 'https://api.reachbell.com');
+
+require_once REACHBELL_PATH . 'includes/woocommerce.php';
 
 /* ─── Settings page ────────────────────────────────────────────── */
 
@@ -134,7 +139,7 @@ function reachbell_settings_page() {
                             value="" autocomplete="new-password" class="regular-text"
                             placeholder="<?php echo esc_attr($reachbell_has_secret ? __('Saved — leave blank to keep it', 'reachbell') : 'rb_secret_…'); ?>" />
                         <p class="description">
-                            <?php esc_html_e('Needed only for "Notify subscribers on publish". Find it in your ReachBell dashboard → Settings → API keys. It stays on this server and is never added to your pages.', 'reachbell'); ?>
+                            <?php esc_html_e('Needed for "Notify subscribers on publish" and the WooCommerce features. Find it in your ReachBell dashboard → Settings → API keys. It stays on this server and is never added to your pages.', 'reachbell'); ?>
                         </p>
                         <?php if ($reachbell_has_secret) : ?>
                             <p>
@@ -175,6 +180,7 @@ function reachbell_settings_page() {
                         <?php endif; ?>
                     </td>
                 </tr>
+                <?php do_action('reachbell_settings_rows'); ?>
             </table>
             <?php submit_button(); ?>
         </form>
@@ -386,5 +392,6 @@ function reachbell_deactivate() {
     }
     flush_rewrite_rules();
     wp_clear_scheduled_hook('reachbell_send_post_notification');
+    reachbell_wc_deactivate();
 }
 register_deactivation_hook(__FILE__, 'reachbell_deactivate');
