@@ -17,6 +17,7 @@ delete_option('reachbell_api_url');
 delete_option('reachbell_auto_prompt');
 delete_option('reachbell_notify_on_publish');
 delete_option('reachbell_secret_key');
+delete_option('reachbell_show_credit');
 delete_option('reachbell_last_notify');
 
 // Drop any scheduled push-on-publish events from previous activations.

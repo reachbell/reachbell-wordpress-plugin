@@ -4,7 +4,7 @@ Tags: push notifications, web push, woocommerce, abandoned cart, back in stock
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.1.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -152,6 +152,10 @@ WordPress.org guidelines. Deactivating instead of uninstalling preserves
 your settings.
 
 == Changelog ==
+
+= 1.1.1 =
+* The "Powered by ReachBell" line in the opt-in prompt is now off by default.
+  Turn it on with "Show ReachBell credit" in Settings → ReachBell.
 
 = 1.1.0 =
 * New WooCommerce section in Settings → ReachBell: order updates,

@@ -1,9 +1,9 @@
 <?php
 /**
  * Plugin Name: ReachBell
- * Plugin URI:  https://reachbell.com/wordpress
+ * Plugin URI:  https://docs.reachbell.com/web-push/wordpress
  * Description: Send push notifications and email campaigns to your WordPress visitors via ReachBell.
- * Version:     1.1.0
+ * Version:     1.1.1
  * Author:      DotSpheres Technologies Pvt Ltd
  * Author URI:  https://reachbell.com
  * License:     GPL-2.0+
@@ -17,7 +17,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('REACHBELL_VERSION', '1.1.0');
+define('REACHBELL_VERSION', '1.1.1');
 define('REACHBELL_FILE', __FILE__);
 define('REACHBELL_SW_RULE', '^reachbell-sw\\.js$');
 define('REACHBELL_PATH', plugin_dir_path(__FILE__));
@@ -51,6 +51,11 @@ function reachbell_register_settings() {
         'default'           => '',
     ]);
     register_setting('reachbell', 'reachbell_auto_prompt', [
+        'type'              => 'boolean',
+        'sanitize_callback' => 'rest_sanitize_boolean',
+        'default'           => false,
+    ]);
+    register_setting('reachbell', 'reachbell_show_credit', [
         'type'              => 'boolean',
         'sanitize_callback' => 'rest_sanitize_boolean',
         'default'           => false,
@@ -127,6 +132,18 @@ function reachbell_settings_page() {
                                 <?php checked(get_option('reachbell_auto_prompt'), 1); ?> />
                             <span class="description">
                                 <?php esc_html_e('Use the prompt configured in your ReachBell dashboard.', 'reachbell'); ?>
+                            </span>
+                        </label>
+                    </td>
+                </tr>
+                <tr>
+                    <th><?php esc_html_e('Show ReachBell credit', 'reachbell'); ?></th>
+                    <td>
+                        <label>
+                            <input type="checkbox" name="reachbell_show_credit" value="1"
+                                <?php checked(get_option('reachbell_show_credit'), 1); ?> />
+                            <span class="description">
+                                <?php esc_html_e('Show a small "Powered by ReachBell" line in the opt-in prompt. Off by default.', 'reachbell'); ?>
                             </span>
                         </label>
                     </td>
@@ -265,9 +282,10 @@ function reachbell_enqueue_sdk() {
     );
 
     $config = [
-        'apiKey'     => (string) $api_key,
-        'swPath'     => reachbell_sw_path(),
-        'autoPrompt' => (bool) get_option('reachbell_auto_prompt'),
+        'apiKey'        => (string) $api_key,
+        'swPath'        => reachbell_sw_path(),
+        'autoPrompt'    => (bool) get_option('reachbell_auto_prompt'),
+        'showPoweredBy' => (bool) get_option('reachbell_show_credit'),
     ];
     if (defined('REACHBELL_API_URL')) {
         $config['apiUrl'] = reachbell_api_url();

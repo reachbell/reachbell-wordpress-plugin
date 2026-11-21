@@ -1570,7 +1570,7 @@ var ReachBellBundle = (function (exports) {
          */
         async showCustomPrompt(cfg) {
             return new Promise(resolve => {
-                var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
+                var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m;
                 (_a = this.closeActivePrompt) === null || _a === void 0 ? void 0 : _a.call(this);
                 (_b = document.getElementById('reachbell-custom-prompt')) === null || _b === void 0 ? void 0 : _b.remove();
                 const accent = safeColor(cfg.accentColor, DEFAULT_ACCENT);
@@ -1842,7 +1842,7 @@ var ReachBellBundle = (function (exports) {
                     declineBtn.type = 'button';
                     declineBtn.textContent = cfg.declineText || DEFAULT_DECLINE;
                     buttons.appendChild(declineBtn);
-                    if (cfg.showPoweredBy !== false) {
+                    if (((_l = this.config) === null || _l === void 0 ? void 0 : _l.showPoweredBy) !== false && cfg.showPoweredBy !== false) {
                         const poweredBy = document.createElement('div');
                         Object.assign(poweredBy.style, {
                             marginTop: '10px', paddingTop: '8px', borderTop: '1px solid rgba(148, 163, 184, 0.15)',
@@ -1912,7 +1912,7 @@ var ReachBellBundle = (function (exports) {
                     }
                 });
                 if (isCenterModal)
-                    (_l = root.querySelector('button[data-action="accept"]')) === null || _l === void 0 ? void 0 : _l.focus({ preventScroll: true });
+                    (_m = root.querySelector('button[data-action="accept"]')) === null || _m === void 0 ? void 0 : _m.focus({ preventScroll: true });
             });
         }
         warnOnce(message, err) {
