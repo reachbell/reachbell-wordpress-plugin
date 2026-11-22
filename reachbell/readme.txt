@@ -4,7 +4,7 @@ Tags: push notifications, web push, woocommerce, abandoned cart, back in stock
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.1.1
+Stable tag: 1.1.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -15,7 +15,7 @@ Web push for WordPress and WooCommerce: new-post alerts, order updates, abandone
 ReachBell lets you re-engage your visitors with real-time push notifications and
 beautifully designed email campaigns — directly from your ReachBell dashboard.
 
-Install the plugin, paste your API key, and you're done. Add your secret key
+Install the plugin, paste your public key (`rb_live_…`), and you're done. Add your secret key
 too and every new post can automatically send a push to subscribers.
 
 Features:
@@ -48,9 +48,9 @@ This plugin connects to the ReachBell service (https://reachbell.com), which
 is required for it to work. ReachBell is provided by DotSpheres Technologies
 Pvt Ltd.
 
-* **Browser SDK (every page, once an API key is saved).** The bundled SDK
+* **Browser SDK (every page, once a public key is saved).** The bundled SDK
   loads your project settings from `https://api.reachbell.com/projects/context`
-  using your public API key. When a visitor agrees to notifications, their
+  using your public key. When a visitor agrees to notifications, their
   browser's push subscription (push endpoint and encryption keys) is sent to
   `https://api.reachbell.com/subscribers`. Nothing is sent before the visitor
   allows notifications, apart from loading the settings.
@@ -90,7 +90,7 @@ ReachBell privacy policy: https://reachbell.com/privacy
 
 1. Upload `reachbell` folder to `/wp-content/plugins/`
 2. Activate the plugin in WordPress
-3. Go to Settings → ReachBell, paste your API key from the [dashboard](https://app.reachbell.com)
+3. Go to Settings → ReachBell, paste your public key (`rb_live_…`) from the [dashboard](https://app.reachbell.com)
 4. Save — the SDK loads automatically on every page, and a service worker is
    served from your site's home path (`/reachbell-sw.js`, or
    `/blog/reachbell-sw.js` when WordPress lives in a subfolder) so push
@@ -107,7 +107,7 @@ Settings → Permalinks and click "Save Changes" once to refresh rewrite rules.
 Sending a campaign is a server-only action, so ReachBell requires your
 project's secret key (`rb_secret_…`) for it. The plugin keeps the secret key
 in your WordPress database, uses it only from wp-cron, and never adds it to
-your pages. The public key (`rb_live_…`) stays in the API Key field and is
+your pages. The public key (`rb_live_…`) goes in the Public key field and is
 only used by the browser SDK. The settings page shows the result of the last
 notification.
 
@@ -145,13 +145,21 @@ so most sites never need this.
 
 Yes for single-site activations. Network-wide activation is on the roadmap.
 
-= Can I keep my API key when I uninstall? =
+= Can I keep my keys when I uninstall? =
 
-No — uninstall removes all plugin options (including the API key) per
+No — uninstall removes all plugin options (including both keys) per
 WordPress.org guidelines. Deactivating instead of uninstalling preserves
 your settings.
 
 == Changelog ==
+
+= 1.1.2 =
+* The "API Key" setting is now "Public key" and only accepts publishable
+  keys (`rb_live_…`). Pasting a secret key there is refused with a message.
+* If a secret key was saved in that field by an earlier version, the
+  ReachBell script and the WooCommerce waitlist button are switched off, the
+  key is hidden on the settings page, and an admin notice explains how to fix
+  it. Rotate that secret key in your ReachBell dashboard.
 
 = 1.1.1 =
 * The "Powered by ReachBell" line in the opt-in prompt is now off by default.

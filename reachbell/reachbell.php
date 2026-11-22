@@ -3,7 +3,7 @@
  * Plugin Name: ReachBell
  * Plugin URI:  https://docs.reachbell.com/web-push/wordpress
  * Description: Send push notifications and email campaigns to your WordPress visitors via ReachBell.
- * Version:     1.1.1
+ * Version:     1.1.2
  * Author:      DotSpheres Technologies Pvt Ltd
  * Author URI:  https://reachbell.com
  * License:     GPL-2.0+
@@ -17,7 +17,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('REACHBELL_VERSION', '1.1.1');
+define('REACHBELL_VERSION', '1.1.2');
 define('REACHBELL_FILE', __FILE__);
 define('REACHBELL_SW_RULE', '^reachbell-sw\\.js$');
 define('REACHBELL_PATH', plugin_dir_path(__FILE__));
@@ -99,6 +99,17 @@ function reachbell_sanitize_public_key($value) {
     return $previous;
 }
 
+/**
+ * The saved public key, or '' when it isn't a publishable rb_live_ key.
+ * Everything that prints the key or depends on the browser SDK goes through
+ * this, so values written around the settings form (WP-CLI, imports, older
+ * builds) can never reach a page.
+ */
+function reachbell_public_key() {
+    $key = trim((string) get_option('reachbell_api_key', ''));
+    return strpos($key, 'rb_live_') === 0 ? $key : '';
+}
+
 /** True when the saved public key is unsafe to print (saved before validation existed). */
 function reachbell_public_key_is_secret() {
     return strpos((string) get_option('reachbell_api_key', ''), 'rb_secret_') === 0;
@@ -151,7 +162,7 @@ function reachbell_settings_page() {
                     <th><label for="reachbell_api_key"><?php esc_html_e('Public key', 'reachbell'); ?></label></th>
                     <td>
                         <input type="text" name="reachbell_api_key" id="reachbell_api_key"
-                            value="<?php echo esc_attr(get_option('reachbell_api_key')); ?>"
+                            value="<?php echo esc_attr(reachbell_public_key_is_secret() ? '' : get_option('reachbell_api_key')); ?>"
                             class="regular-text" placeholder="rb_live_…" />
                         <p class="description">
                             <?php esc_html_e('Starts with rb_live_. Find it in your ReachBell dashboard → Settings → API keys → Publishable key. This key is shown on your site, so never paste the secret key here.', 'reachbell'); ?>
@@ -304,9 +315,9 @@ add_action('template_redirect', 'reachbell_serve_sw', 0);
  * and break the integration — both of which were the previous shape.
  */
 function reachbell_enqueue_sdk() {
-    $api_key = (string) get_option('reachbell_api_key');
-    // Never print a secret key into public HTML, even one saved before validation.
-    if ($api_key === '' || strpos($api_key, 'rb_secret_') === 0) return;
+    // Only a publishable key is ever printed into public HTML.
+    $api_key = reachbell_public_key();
+    if ($api_key === '') return;
 
     wp_enqueue_script(
         'reachbell-sdk',
