@@ -17,6 +17,8 @@ $GLOBALS['rb_errors'] = [];
 $GLOBALS['rb_caps'] = true;
 
 function get_option($name, $default = false) { return $GLOBALS['rb_options'][$name] ?? $default; }
+function update_option($name, $value) { $GLOBALS['rb_options'][$name] = $value; return true; }
+function delete_option($name) { unset($GLOBALS['rb_options'][$name]); return true; }
 function add_settings_error($setting, $code, $message) { $GLOBALS['rb_errors'][] = $code; }
 function sanitize_text_field($s) { return trim(preg_replace('/[\r\n\t]+/', ' ', strip_tags((string) $s))); }
 function __($s, $d = null) { return $s; }
@@ -35,6 +37,8 @@ foreach (['add_action', 'add_filter', 'register_activation_hook', 'register_deac
 require __DIR__ . '/../reachbell/reachbell.php';
 
 $failures = 0;
+const LIVE = 'rb_live_0123456789abcdef0123456789abcdef';
+const LIVE_OLD = 'rb_live_ffffffffffffffffffffffffffffffff';
 function check($label, $actual, $expected) {
     global $failures;
     if ($actual === $expected) { echo "ok   $label\n"; return; }
@@ -48,32 +52,76 @@ function reset_state(array $options = []) {
 
 // Saving the public key
 reset_state();
-check('accepts a publishable key', reachbell_sanitize_public_key('  rb_live_abc123 '), 'rb_live_abc123');
+check('accepts a publishable key', reachbell_sanitize_public_key('  ' . LIVE . ' '), LIVE);
 check('no error for a publishable key', $GLOBALS['rb_errors'], []);
 
 reset_state();
 check('accepts an empty value', reachbell_sanitize_public_key(''), '');
 
-reset_state(['reachbell_api_key' => 'rb_live_old']);
-check('refuses a secret key and keeps the old one', reachbell_sanitize_public_key('rb_secret_xyz'), 'rb_live_old');
+reset_state(['reachbell_api_key' => LIVE_OLD, 'reachbell_secret_key' => 'rb_secret_saved']);
+check('refuses a secret key and keeps the old one', reachbell_sanitize_public_key('rb_secret_xyz'), LIVE_OLD);
 check('reports the secret key error', $GLOBALS['rb_errors'], ['reachbell_api_key_invalid']);
+check('keeps the saved secret when one exists', get_option('reachbell_secret_key'), 'rb_secret_saved');
 
-reset_state(['reachbell_api_key' => 'rb_live_old']);
-check('refuses an unknown key shape', reachbell_sanitize_public_key('sk_live_123'), 'rb_live_old');
+reset_state(['reachbell_api_key' => LIVE_OLD]);
+reachbell_sanitize_public_key('rb_secret_pasted');
+check('a secret pasted in the public field becomes the secret key', get_option('reachbell_secret_key'), 'rb_secret_pasted');
+
+reset_state(['reachbell_api_key' => LIVE_OLD]);
+check('refuses an unknown key shape', reachbell_sanitize_public_key('sk_live_123'), LIVE_OLD);
+check('refuses a bare prefix', reachbell_sanitize_public_key('rb_live_'), LIVE_OLD);
+check('refuses a truncated key', reachbell_sanitize_public_key(substr(LIVE, 0, 20)), LIVE_OLD);
 
 reset_state(['reachbell_api_key' => 'rb_secret_leaked']);
 check('never keeps a secret that was saved earlier', reachbell_sanitize_public_key('garbage'), '');
 
 // What the front end may print
-reset_state(['reachbell_api_key' => 'rb_live_abc']);
-check('public key returned when publishable', reachbell_public_key(), 'rb_live_abc');
+reset_state(['reachbell_api_key' => LIVE]);
+check('public key returned when publishable', reachbell_public_key(), LIVE);
 reset_state(['reachbell_api_key' => 'rb_secret_abc']);
 check('public key empty for a secret', reachbell_public_key(), '');
 check('secret detected', reachbell_public_key_is_secret(), true);
-reset_state(['reachbell_api_key' => 'mistyped']);
-check('public key empty for any other value', reachbell_public_key(), '');
+reset_state(['reachbell_api_key' => "  rb_secret_abc\n"]);
+check('secret detected with surrounding whitespace', reachbell_public_key_is_secret(), true);
+reset_state(['reachbell_api_key' => 'rb_live_short']);
+check('public key empty for a malformed key', reachbell_public_key(), '');
 reset_state();
 check('public key empty when unset', reachbell_public_key(), '');
+
+// Moving a secret that an earlier version saved in the public field
+reset_state(['reachbell_api_key' => ' rb_secret_old ']);
+reachbell_move_misplaced_secret();
+check('misplaced secret leaves the public option', get_option('reachbell_api_key'), '');
+check('misplaced secret becomes the secret key', get_option('reachbell_secret_key'), 'rb_secret_old');
+check('leak is remembered', get_option('reachbell_leaked_secret'), hash('sha256', 'rb_secret_old'));
+
+reset_state(['reachbell_api_key' => 'rb_secret_old', 'reachbell_secret_key' => 'rb_secret_current']);
+reachbell_move_misplaced_secret();
+check('an existing secret key is not overwritten', get_option('reachbell_secret_key'), 'rb_secret_current');
+check('the misplaced secret is still removed', get_option('reachbell_api_key'), '');
+
+reset_state(['reachbell_api_key' => LIVE]);
+reachbell_move_misplaced_secret();
+check('a valid public key is left alone', get_option('reachbell_api_key'), LIVE);
+check('no leak recorded for a valid key', get_option('reachbell_leaked_secret'), false);
+
+// The rotate notice
+reset_state(['reachbell_leaked_secret' => hash('sha256', 'rb_secret_old')]);
+ob_start(); reachbell_secret_in_public_field_notice(); $out = ob_get_clean();
+check('notice shown after a leak', strpos($out, 'Rotate it') !== false, true);
+$GLOBALS['rb_caps'] = false;
+ob_start(); reachbell_secret_in_public_field_notice(); $out = ob_get_clean();
+check('notice hidden from non-admins', $out, '');
+$GLOBALS['rb_caps'] = true;
+reset_state();
+ob_start(); reachbell_secret_in_public_field_notice(); $out = ob_get_clean();
+check('no notice without a leak', $out, '');
+
+reset_state(['reachbell_leaked_secret' => hash('sha256', 'rb_secret_old'), 'reachbell_secret_key' => 'rb_secret_old']);
+reachbell_sanitize_secret_key('rb_secret_old');
+check('re-saving the leaked secret keeps the notice', (bool) get_option('reachbell_leaked_secret'), true);
+reachbell_sanitize_secret_key('rb_secret_rotated');
+check('saving a rotated secret clears the notice', get_option('reachbell_leaked_secret'), false);
 
 echo $failures ? "\n$failures failing\n" : "\nall passed\n";
 exit($failures ? 1 : 0);

@@ -79,22 +79,45 @@ function reachbell_api_url() {
     return untrailingslashit($url ? $url : REACHBELL_DEFAULT_API_URL);
 }
 
+/** Publishable keys are rb_live_ plus 32 hex characters, as the API issues them. */
+function reachbell_is_public_key($value) {
+    return (bool) preg_match('/^rb_live_[a-f0-9]{32}$/', (string) $value);
+}
+
+function reachbell_is_secret_key($value) {
+    return strpos(trim((string) $value), 'rb_secret_') === 0;
+}
+
+/**
+ * Keep a secret key that ended up in the public key field: save it as the
+ * secret key when none is stored yet, so the admin doesn't paste it twice.
+ */
+function reachbell_adopt_secret_key($secret) {
+    if (get_option('reachbell_secret_key', '') !== '') return false;
+    update_option('reachbell_secret_key', $secret);
+    return get_option('reachbell_secret_key', '') === $secret;
+}
+
 /**
  * The public key is printed into every front-end page, so it must never be
  * a secret key. Reject anything that isn't a publishable rb_live_ key.
  */
 function reachbell_sanitize_public_key($value) {
     $value = trim(sanitize_text_field((string) $value));
-    if ($value === '' || strpos($value, 'rb_live_') === 0) {
+    if ($value === '' || reachbell_is_public_key($value)) {
         return $value;
     }
-    $previous = (string) get_option('reachbell_api_key', '');
-    if (strpos($previous, 'rb_secret_') === 0) {
+    $previous = trim((string) get_option('reachbell_api_key', ''));
+    if (!reachbell_is_public_key($previous)) {
         $previous = '';
     }
-    $message = strpos($value, 'rb_secret_') === 0
-        ? __('That is your secret key. Paste it in the Secret key field below; the public key field only takes keys starting with rb_live_.', 'reachbell')
-        : __('The public key must start with rb_live_. The previous key was kept.', 'reachbell');
+    if (reachbell_is_secret_key($value)) {
+        $message = reachbell_adopt_secret_key($value)
+            ? __('That was your secret key, so it was saved in the Secret key field instead. The public key field only takes keys starting with rb_live_.', 'reachbell')
+            : __('That is your secret key. The public key field only takes keys starting with rb_live_; a secret key is already saved below.', 'reachbell');
+    } else {
+        $message = __('That is not a public key. Copy the whole key from your ReachBell dashboard: rb_live_ followed by 32 letters and numbers. The previous key was kept.', 'reachbell');
+    }
     add_settings_error('reachbell_api_key', 'reachbell_api_key_invalid', $message);
     return $previous;
 }
@@ -107,18 +130,33 @@ function reachbell_sanitize_public_key($value) {
  */
 function reachbell_public_key() {
     $key = trim((string) get_option('reachbell_api_key', ''));
-    return strpos($key, 'rb_live_') === 0 ? $key : '';
+    return reachbell_is_public_key($key) ? $key : '';
 }
 
-/** True when the saved public key is unsafe to print (saved before validation existed). */
+/** True when the saved public key is actually a secret key. */
 function reachbell_public_key_is_secret() {
-    return strpos((string) get_option('reachbell_api_key', ''), 'rb_secret_') === 0;
+    return reachbell_is_secret_key(get_option('reachbell_api_key', ''));
 }
+
+/**
+ * Earlier versions accepted a secret key in the public key field and printed
+ * it into every page. Move it out of that option as soon as an admin page
+ * loads (also catches WP-CLI writes), and remember it so the admin is told
+ * to rotate it.
+ */
+function reachbell_move_misplaced_secret() {
+    if (!reachbell_public_key_is_secret()) return;
+    $secret = trim((string) get_option('reachbell_api_key', ''));
+    reachbell_adopt_secret_key($secret);
+    update_option('reachbell_leaked_secret', hash('sha256', $secret));
+    update_option('reachbell_api_key', '');
+}
+add_action('admin_init', 'reachbell_move_misplaced_secret', 5);
 
 function reachbell_secret_in_public_field_notice() {
-    if (!current_user_can('manage_options') || !reachbell_public_key_is_secret()) return;
+    if (!current_user_can('manage_options') || !get_option('reachbell_leaked_secret')) return;
     echo '<div class="notice notice-error"><p>' . esc_html__(
-        'ReachBell: your secret key is saved in the public key field, so the ReachBell script is switched off on your site. Paste your rb_live_ public key there instead, then rotate the secret key in your ReachBell dashboard.',
+        'ReachBell: your secret key was saved in the public key field, so it may have been visible in your pages\' source. It has been moved to the Secret key field. Rotate it in your ReachBell dashboard, save the new secret key in Settings → ReachBell, and paste your rb_live_ public key there too.',
         'reachbell'
     ) . '</p></div>';
 }
@@ -129,13 +167,18 @@ function reachbell_sanitize_secret_key($value) {
     if ($value === '') {
         return get_option('reachbell_secret_key', '');
     }
-    if (strpos($value, 'rb_secret_') !== 0) {
+    if (!reachbell_is_secret_key($value)) {
         add_settings_error(
             'reachbell_secret_key',
             'reachbell_secret_key_invalid',
             __('The secret key must start with rb_secret_. The previous key was kept.', 'reachbell')
         );
         return get_option('reachbell_secret_key', '');
+    }
+    // A new secret replaces the one that leaked, so the rotate notice can go.
+    $leaked = get_option('reachbell_leaked_secret');
+    if ($leaked && !hash_equals((string) $leaked, hash('sha256', $value))) {
+        delete_option('reachbell_leaked_secret');
     }
     return $value;
 }
@@ -162,7 +205,7 @@ function reachbell_settings_page() {
                     <th><label for="reachbell_api_key"><?php esc_html_e('Public key', 'reachbell'); ?></label></th>
                     <td>
                         <input type="text" name="reachbell_api_key" id="reachbell_api_key"
-                            value="<?php echo esc_attr(reachbell_public_key_is_secret() ? '' : get_option('reachbell_api_key')); ?>"
+                            value="<?php echo esc_attr(reachbell_public_key_is_secret() ? '' : (string) get_option('reachbell_api_key')); ?>"
                             class="regular-text" placeholder="rb_live_…" />
                         <p class="description">
                             <?php esc_html_e('Starts with rb_live_. Find it in your ReachBell dashboard → Settings → API keys → Publishable key. This key is shown on your site, so never paste the secret key here.', 'reachbell'); ?>

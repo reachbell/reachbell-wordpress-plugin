@@ -154,12 +154,13 @@ your settings.
 == Changelog ==
 
 = 1.1.2 =
-* The "API Key" setting is now "Public key" and only accepts publishable
-  keys (`rb_live_…`). Pasting a secret key there is refused with a message.
-* If a secret key was saved in that field by an earlier version, the
-  ReachBell script and the WooCommerce waitlist button are switched off, the
-  key is hidden on the settings page, and an admin notice explains how to fix
-  it. Rotate that secret key in your ReachBell dashboard.
+* The "API Key" setting is now "Public key" and only accepts a complete
+  publishable key (`rb_live_` followed by 32 characters). A secret key pasted
+  there is saved in the Secret key field instead, when that field is empty.
+* If an earlier version saved a secret key in the public key field, it is
+  moved to the Secret key field the next time an admin page loads, and an
+  admin notice asks you to rotate it in your ReachBell dashboard. The notice
+  goes away once you save the new secret key.
 
 = 1.1.1 =
 * The "Powered by ReachBell" line in the opt-in prompt is now off by default.

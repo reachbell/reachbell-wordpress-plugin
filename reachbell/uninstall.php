@@ -19,6 +19,7 @@ delete_option('reachbell_notify_on_publish');
 delete_option('reachbell_secret_key');
 delete_option('reachbell_show_credit');
 delete_option('reachbell_last_notify');
+delete_option('reachbell_leaked_secret');
 
 // Drop any scheduled push-on-publish events from previous activations.
 wp_clear_scheduled_hook('reachbell_send_post_notification');
