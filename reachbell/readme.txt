@@ -160,7 +160,11 @@ your settings.
 * If an earlier version saved a secret key in the public key field, it is
   moved to the Secret key field the next time an admin page loads, and an
   admin notice asks you to rotate it in your ReachBell dashboard. The notice
-  goes away once you save the new secret key.
+  goes away once you save a secret key this site didn't already have, or
+  when you dismiss it (for sites that only use the public key).
+* A saved public key that isn't complete (for example one cut short by an
+  earlier version) now shows a warning under the field, since the SDK isn't
+  loaded with it.
 
 = 1.1.1 =
 * The "Powered by ReachBell" line in the opt-in prompt is now off by default.

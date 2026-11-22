@@ -28,6 +28,12 @@ function plugin_dir_path($f) { return dirname($f) . '/'; }
 function plugin_dir_url($f) { return 'https://example.test/wp-content/plugins/reachbell/'; }
 function untrailingslashit($s) { return rtrim($s, '/\\'); }
 function __return_true() { return true; }
+function wp_unslash($s) { return stripslashes($s); }
+function esc_url($s) { return htmlspecialchars((string) $s, ENT_QUOTES); }
+function admin_url($p = '') { return 'https://example.test/wp-admin/' . $p; }
+function wp_nonce_url($url, $action) { return $url . '&_wpnonce=nonce-' . $action; }
+function check_admin_referer($action) { $GLOBALS['rb_referer_checked'] = $action; return true; }
+function wp_die($m = '') { throw new RuntimeException('wp_die'); }
 // Anything else WordPress-shaped called at load time is a no-op.
 foreach (['add_action', 'add_filter', 'register_activation_hook', 'register_deactivation_hook',
           'register_uninstall_hook', 'load_plugin_textdomain'] as $fn) {
@@ -45,9 +51,11 @@ function check($label, $actual, $expected) {
     $failures++;
     echo "FAIL $label\n     expected " . var_export($expected, true) . ", got " . var_export($actual, true) . "\n";
 }
-function reset_state(array $options = []) {
+function reset_state(array $options = [], array $post = []) {
     $GLOBALS['rb_options'] = $options;
     $GLOBALS['rb_errors'] = [];
+    $GLOBALS['rb_caps'] = true;
+    $_POST = $post;
 }
 
 // Saving the public key
@@ -122,6 +130,49 @@ reachbell_sanitize_secret_key('rb_secret_old');
 check('re-saving the leaked secret keeps the notice', (bool) get_option('reachbell_leaked_secret'), true);
 reachbell_sanitize_secret_key('rb_secret_rotated');
 check('saving a rotated secret clears the notice', get_option('reachbell_leaked_secret'), false);
+
+reset_state(['reachbell_leaked_secret' => hash('sha256', 'rb_secret_old'), 'reachbell_secret_key' => 'rb_secret_current']);
+reachbell_sanitize_secret_key('rb_secret_current');
+check('re-entering the secret that was already saved keeps the notice', (bool) get_option('reachbell_leaked_secret'), true);
+reachbell_sanitize_secret_key('rb_secret_old');
+check('re-entering the leaked secret keeps the notice', (bool) get_option('reachbell_leaked_secret'), true);
+reachbell_sanitize_secret_key('rb_secret_new');
+check('a secret new to this site clears the notice', get_option('reachbell_leaked_secret'), false);
+
+reset_state(['reachbell_leaked_secret' => hash('sha256', 'rb_secret_old'), 'reachbell_secret_key' => 'rb_secret_old']);
+reachbell_sanitize_secret_key('');
+check('leaving the secret field blank keeps the notice', (bool) get_option('reachbell_leaked_secret'), true);
+
+// Dismissing the rotate notice
+reset_state(['reachbell_leaked_secret' => hash('sha256', 'rb_secret_old')]);
+ob_start(); reachbell_secret_in_public_field_notice(); $out = ob_get_clean();
+check('notice has a nonced dismiss link', strpos($out, 'action=reachbell_dismiss_leaked_secret&amp;_wpnonce=nonce-reachbell_dismiss_leaked_secret') !== false, true);
+$GLOBALS['rb_caps'] = false;
+$denied = false;
+try { reachbell_dismiss_leaked_secret(); } catch (RuntimeException $e) { $denied = true; }
+check('non-admins cannot dismiss', $denied, true);
+check('a refused dismiss keeps the notice', (bool) get_option('reachbell_leaked_secret'), true);
+
+// Secret pasted in the public field while the Secret field is also filled
+reset_state(['reachbell_api_key' => LIVE_OLD], ['reachbell_secret_key' => 'rb_secret_typed']);
+check('secret in public field with a typed secret keeps the old public key', reachbell_sanitize_public_key('rb_secret_pasted'), LIVE_OLD);
+check('the pasted secret is not adopted', get_option('reachbell_secret_key'), false);
+check('the typed secret is what gets saved', reachbell_sanitize_secret_key($_POST['reachbell_secret_key']), 'rb_secret_typed');
+
+reset_state(['reachbell_api_key' => LIVE_OLD], ['reachbell_secret_key' => '  ']);
+reachbell_sanitize_public_key('rb_secret_pasted');
+check('a blank Secret field still lets the pasted secret be adopted', get_option('reachbell_secret_key'), 'rb_secret_pasted');
+
+// A saved public key that isn't valid (e.g. truncated by an older version)
+reset_state(['reachbell_api_key' => substr(LIVE, 0, 20)]);
+check('invalid saved key detected', reachbell_public_key_is_invalid(), true);
+check('invalid saved key is replaced by empty, not kept', reachbell_sanitize_public_key('still-wrong'), '');
+reset_state(['reachbell_api_key' => LIVE]);
+check('valid saved key is not flagged', reachbell_public_key_is_invalid(), false);
+reset_state(['reachbell_api_key' => 'rb_secret_abc']);
+check('a saved secret is not flagged as an invalid public key', reachbell_public_key_is_invalid(), false);
+reset_state();
+check('no saved key is not flagged', reachbell_public_key_is_invalid(), false);
 
 echo $failures ? "\n$failures failing\n" : "\nall passed\n";
 exit($failures ? 1 : 0);
