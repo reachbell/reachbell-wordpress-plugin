@@ -163,6 +163,15 @@ reset_state(['reachbell_api_key' => LIVE_OLD], ['reachbell_secret_key' => '  '])
 reachbell_sanitize_public_key('rb_secret_pasted');
 check('a blank Secret field still lets the pasted secret be adopted', get_option('reachbell_secret_key'), 'rb_secret_pasted');
 
+reset_state(['reachbell_api_key' => LIVE_OLD, 'reachbell_secret_key' => 'rb_secret_saved'], ['reachbell_secret_key' => 'not-a-secret']);
+check('secret in public field with an invalid Secret field keeps the old public key', reachbell_sanitize_public_key('rb_secret_pasted'), LIVE_OLD);
+check('the invalid Secret field leaves the saved secret alone', reachbell_sanitize_secret_key($_POST['reachbell_secret_key']), 'rb_secret_saved');
+check('both fields report an error', $GLOBALS['rb_errors'], ['reachbell_api_key_invalid', 'reachbell_secret_key_invalid']);
+
+reset_state(['reachbell_api_key' => LIVE_OLD], ['reachbell_secret_key' => ['rb_secret_array']]);
+reachbell_sanitize_public_key('rb_secret_pasted');
+check('an array in the Secret field counts as blank', get_option('reachbell_secret_key'), 'rb_secret_pasted');
+
 // A saved public key that isn't valid (e.g. truncated by an older version)
 reset_state(['reachbell_api_key' => substr(LIVE, 0, 20)]);
 check('invalid saved key detected', reachbell_public_key_is_invalid(), true);

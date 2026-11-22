@@ -89,14 +89,15 @@ function reachbell_is_secret_key($value) {
 }
 
 /**
- * True when this settings submit also filled in the Secret key field. Read
- * straight from the request because the public key is sanitized first.
+ * What this settings submit put in the Secret key field ('' when it was left
+ * blank or isn't a string). Read straight from the request because the public
+ * key is sanitized first.
  */
-function reachbell_secret_key_submitted() {
+function reachbell_submitted_secret_key() {
     // phpcs:ignore WordPress.Security.NonceVerification.Missing -- options.php checked the nonce before sanitizing.
-    if (!isset($_POST['reachbell_secret_key'])) return false;
+    if (!isset($_POST['reachbell_secret_key']) || !is_string($_POST['reachbell_secret_key'])) return '';
     // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-    return trim(sanitize_text_field(wp_unslash((string) $_POST['reachbell_secret_key']))) !== '';
+    return trim(sanitize_text_field(wp_unslash($_POST['reachbell_secret_key'])));
 }
 
 /**
@@ -123,10 +124,15 @@ function reachbell_sanitize_public_key($value) {
         $previous = '';
     }
     if (reachbell_is_secret_key($value)) {
-        if (reachbell_secret_key_submitted()) {
+        $submitted_secret = reachbell_submitted_secret_key();
+        if ($submitted_secret !== '' && reachbell_is_secret_key($submitted_secret)) {
             // The Secret key field is saved right after this, so adopting the
             // pasted key would be overwritten anyway: drop it and say so.
             $message = __('That is a secret key, so it was not saved in the public key field. You also filled in the Secret key field, and that key is the one saved. The public key field only takes keys starting with rb_live_.', 'reachbell');
+        } elseif ($submitted_secret !== '') {
+            // The Secret key field holds something that isn't a secret key, so
+            // it is rejected too. Don't guess which key the admin meant.
+            $message = __('That is a secret key, so it was not saved in the public key field. The Secret key field did not hold a valid secret key either, so the saved secret key was not changed. Paste the secret key (rb_secret_...) into the Secret key field only; the public key field only takes keys starting with rb_live_.', 'reachbell');
         } elseif (reachbell_adopt_secret_key($value)) {
             $message = __('That was your secret key, so it was saved in the Secret key field instead. The public key field only takes keys starting with rb_live_.', 'reachbell');
         } else {
