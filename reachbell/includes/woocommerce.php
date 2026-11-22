@@ -236,8 +236,8 @@ function reachbell_wc_cart_tag($product_id) {
 }
 
 function reachbell_wc_enqueue() {
-    if (!reachbell_wc_active() || !get_option('reachbell_api_key')) return;
-    if (!wp_script_is('reachbell-sdk', 'enqueued')) return;
+    // reachbell-sdk is only enqueued with a valid public key.
+    if (!reachbell_wc_active() || !wp_script_is('reachbell-sdk', 'enqueued')) return;
 
     wp_enqueue_script('reachbell-woo', REACHBELL_URL . 'assets/reachbell-woo.js', ['reachbell-sdk'], REACHBELL_VERSION, true);
 
@@ -560,7 +560,7 @@ function reachbell_wc_deactivate() {
 }
 
 function reachbell_wc_render_waitlist() {
-    if (!reachbell_wc_option('reachbell_wc_waitlist') || !get_option('reachbell_api_key')) return;
+    if (!reachbell_wc_option('reachbell_wc_waitlist') || reachbell_public_key() === '') return;
     global $product;
     if (!$product || $product->is_in_stock()) return;
     ?>

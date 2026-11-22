@@ -3,7 +3,7 @@
  * Plugin Name: ReachBell
  * Plugin URI:  https://docs.reachbell.com/web-push/wordpress
  * Description: Send push notifications and email campaigns to your WordPress visitors via ReachBell.
- * Version:     1.1.1
+ * Version:     1.1.2
  * Author:      DotSpheres Technologies Pvt Ltd
  * Author URI:  https://reachbell.com
  * License:     GPL-2.0+
@@ -17,7 +17,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('REACHBELL_VERSION', '1.1.1');
+define('REACHBELL_VERSION', '1.1.2');
 define('REACHBELL_FILE', __FILE__);
 define('REACHBELL_SW_RULE', '^reachbell-sw\\.js$');
 define('REACHBELL_PATH', plugin_dir_path(__FILE__));
@@ -47,7 +47,7 @@ function reachbell_register_settings() {
     // later flow into wp_enqueue_script() or wp_remote_post().
     register_setting('reachbell', 'reachbell_api_key', [
         'type'              => 'string',
-        'sanitize_callback' => 'sanitize_text_field',
+        'sanitize_callback' => 'reachbell_sanitize_public_key',
         'default'           => '',
     ]);
     register_setting('reachbell', 'reachbell_auto_prompt', [
@@ -79,18 +79,160 @@ function reachbell_api_url() {
     return untrailingslashit($url ? $url : REACHBELL_DEFAULT_API_URL);
 }
 
+/** Publishable keys are rb_live_ plus 32 hex characters, as the API issues them. */
+function reachbell_is_public_key($value) {
+    return (bool) preg_match('/^rb_live_[a-f0-9]{32}$/', (string) $value);
+}
+
+function reachbell_is_secret_key($value) {
+    return strpos(trim((string) $value), 'rb_secret_') === 0;
+}
+
+/**
+ * What this settings submit put in the Secret key field ('' when it was left
+ * blank or isn't a string). Read straight from the request because the public
+ * key is sanitized first.
+ */
+function reachbell_submitted_secret_key() {
+    // phpcs:ignore WordPress.Security.NonceVerification.Missing -- options.php checked the nonce before sanitizing.
+    if (!isset($_POST['reachbell_secret_key']) || !is_string($_POST['reachbell_secret_key'])) return '';
+    // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+    return trim(sanitize_text_field(wp_unslash($_POST['reachbell_secret_key'])));
+}
+
+/**
+ * Keep a secret key that ended up in the public key field: save it as the
+ * secret key when none is stored yet, so the admin doesn't paste it twice.
+ */
+function reachbell_adopt_secret_key($secret) {
+    if (get_option('reachbell_secret_key', '') !== '') return false;
+    update_option('reachbell_secret_key', $secret);
+    return get_option('reachbell_secret_key', '') === $secret;
+}
+
+/**
+ * The public key is printed into every front-end page, so it must never be
+ * a secret key. Reject anything that isn't a publishable rb_live_ key.
+ */
+function reachbell_sanitize_public_key($value) {
+    $value = trim(sanitize_text_field((string) $value));
+    if ($value === '' || reachbell_is_public_key($value)) {
+        return $value;
+    }
+    $previous = trim((string) get_option('reachbell_api_key', ''));
+    if (!reachbell_is_public_key($previous)) {
+        $previous = '';
+    }
+    if (reachbell_is_secret_key($value)) {
+        $submitted_secret = reachbell_submitted_secret_key();
+        if ($submitted_secret !== '' && reachbell_is_secret_key($submitted_secret)) {
+            // The Secret key field is saved right after this, so adopting the
+            // pasted key would be overwritten anyway: drop it and say so.
+            $message = __('That is a secret key, so it was not saved in the public key field. You also filled in the Secret key field, and that key is the one saved. The public key field only takes keys starting with rb_live_.', 'reachbell');
+        } elseif ($submitted_secret !== '') {
+            // The Secret key field holds something that isn't a secret key, so
+            // it is rejected too. Don't guess which key the admin meant.
+            $message = __('That is a secret key, so it was not saved in the public key field. The Secret key field did not hold a valid secret key either, so the saved secret key was not changed. Paste the secret key (rb_secret_...) into the Secret key field only; the public key field only takes keys starting with rb_live_.', 'reachbell');
+        } elseif (reachbell_adopt_secret_key($value)) {
+            $message = __('That was your secret key, so it was saved in the Secret key field instead. The public key field only takes keys starting with rb_live_.', 'reachbell');
+        } else {
+            $message = __('That is your secret key, so it was not saved. The public key field only takes keys starting with rb_live_; a secret key is already saved below.', 'reachbell');
+        }
+    } elseif ($previous !== '') {
+        $message = __('That is not a public key. Copy the whole key from your ReachBell dashboard: rb_live_ followed by 32 letters and numbers. The previous key was kept.', 'reachbell');
+    } else {
+        $message = __('That is not a public key, and no valid public key was saved before, so the field is now empty. Copy the whole key from your ReachBell dashboard: rb_live_ followed by 32 letters and numbers.', 'reachbell');
+    }
+    add_settings_error('reachbell_api_key', 'reachbell_api_key_invalid', $message);
+    return $previous;
+}
+
+/**
+ * The saved public key, or '' when it isn't a publishable rb_live_ key.
+ * Everything that prints the key or depends on the browser SDK goes through
+ * this, so values written around the settings form (WP-CLI, imports, older
+ * builds) can never reach a page.
+ */
+function reachbell_public_key() {
+    $key = trim((string) get_option('reachbell_api_key', ''));
+    return reachbell_is_public_key($key) ? $key : '';
+}
+
+/** True when the saved public key is actually a secret key. */
+function reachbell_public_key_is_secret() {
+    return reachbell_is_secret_key(get_option('reachbell_api_key', ''));
+}
+
+/**
+ * True when a public key is saved but isn't a full publishable key (for
+ * example one cut short by an older version). The SDK isn't loaded then.
+ */
+function reachbell_public_key_is_invalid() {
+    $key = trim((string) get_option('reachbell_api_key', ''));
+    return $key !== '' && !reachbell_is_secret_key($key) && !reachbell_is_public_key($key);
+}
+
+/**
+ * Earlier versions accepted a secret key in the public key field and printed
+ * it into every page. Move it out of that option as soon as an admin page
+ * loads (also catches WP-CLI writes), and remember it so the admin is told
+ * to rotate it.
+ */
+function reachbell_move_misplaced_secret() {
+    if (!reachbell_public_key_is_secret()) return;
+    $secret = trim((string) get_option('reachbell_api_key', ''));
+    reachbell_adopt_secret_key($secret);
+    update_option('reachbell_leaked_secret', hash('sha256', $secret));
+    update_option('reachbell_api_key', '');
+}
+add_action('admin_init', 'reachbell_move_misplaced_secret', 5);
+
+function reachbell_secret_in_public_field_notice() {
+    if (!current_user_can('manage_options') || !get_option('reachbell_leaked_secret')) return;
+    $dismiss = wp_nonce_url(admin_url('admin-post.php?action=reachbell_dismiss_leaked_secret'), 'reachbell_dismiss_leaked_secret');
+    echo '<div class="notice notice-error"><p>' . esc_html__(
+        'ReachBell: your secret key was saved in the public key field, so it may have been visible in your pages\' source. It has been taken out of that field (and saved as the Secret key if none was saved yet). Rotate it in your ReachBell dashboard, save the new secret key in Settings → ReachBell, and paste your rb_live_ public key there too.',
+        'reachbell'
+    ) . '</p><p><a href="' . esc_url($dismiss) . '">' . esc_html__(
+        'I have rotated the key (or don\'t use a secret key), dismiss this',
+        'reachbell'
+    ) . '</a></p></div>';
+}
+add_action('admin_notices', 'reachbell_secret_in_public_field_notice');
+
+/** Lets the admin clear the rotate notice, e.g. on sites that only use the public key. */
+function reachbell_dismiss_leaked_secret() {
+    if (!current_user_can('manage_options')) {
+        wp_die(esc_html__('You are not allowed to do this.', 'reachbell'));
+    }
+    check_admin_referer('reachbell_dismiss_leaked_secret');
+    delete_option('reachbell_leaked_secret');
+    wp_safe_redirect(admin_url('options-general.php?page=reachbell'));
+    exit;
+}
+add_action('admin_post_reachbell_dismiss_leaked_secret', 'reachbell_dismiss_leaked_secret');
+
 function reachbell_sanitize_secret_key($value) {
     $value = trim(sanitize_text_field((string) $value));
     if ($value === '') {
         return get_option('reachbell_secret_key', '');
     }
-    if (strpos($value, 'rb_secret_') !== 0) {
+    if (!reachbell_is_secret_key($value)) {
         add_settings_error(
             'reachbell_secret_key',
             'reachbell_secret_key_invalid',
             __('The secret key must start with rb_secret_. The previous key was kept.', 'reachbell')
         );
         return get_option('reachbell_secret_key', '');
+    }
+    // Entering a secret this site didn't already have (neither the leaked one
+    // nor the one saved now) is taken as the rotated key, so the rotate notice
+    // can go. Re-saving a key that was already here proves nothing about the
+    // leaked one; the admin can still dismiss the notice by hand.
+    $leaked = get_option('reachbell_leaked_secret');
+    $current = trim((string) get_option('reachbell_secret_key', ''));
+    if ($leaked && !hash_equals((string) $leaked, hash('sha256', $value)) && $value !== $current) {
+        delete_option('reachbell_leaked_secret');
     }
     return $value;
 }
@@ -114,13 +256,18 @@ function reachbell_settings_page() {
             <?php settings_fields('reachbell'); ?>
             <table class="form-table">
                 <tr>
-                    <th><label for="reachbell_api_key"><?php esc_html_e('API Key', 'reachbell'); ?></label></th>
+                    <th><label for="reachbell_api_key"><?php esc_html_e('Public key', 'reachbell'); ?></label></th>
                     <td>
                         <input type="text" name="reachbell_api_key" id="reachbell_api_key"
-                            value="<?php echo esc_attr(get_option('reachbell_api_key')); ?>"
+                            value="<?php echo esc_attr(reachbell_public_key_is_secret() ? '' : (string) get_option('reachbell_api_key')); ?>"
                             class="regular-text" placeholder="rb_live_…" />
+                        <?php if (reachbell_public_key_is_invalid()) : ?>
+                            <p class="description" style="color:#b32d2e;">
+                                <?php esc_html_e('This saved key is not a full public key, so ReachBell is not loaded on your site. Paste the whole key from your ReachBell dashboard: rb_live_ followed by 32 letters and numbers.', 'reachbell'); ?>
+                            </p>
+                        <?php endif; ?>
                         <p class="description">
-                            <?php esc_html_e('Find this in your ReachBell dashboard → Settings → API key.', 'reachbell'); ?>
+                            <?php esc_html_e('Starts with rb_live_. Find it in your ReachBell dashboard → Settings → API keys → Publishable key. This key is shown on your site, so never paste the secret key here.', 'reachbell'); ?>
                         </p>
                     </td>
                 </tr>
@@ -270,8 +417,9 @@ add_action('template_redirect', 'reachbell_serve_sw', 0);
  * and break the integration — both of which were the previous shape.
  */
 function reachbell_enqueue_sdk() {
-    $api_key = get_option('reachbell_api_key');
-    if (!$api_key) return;
+    // Only a publishable key is ever printed into public HTML.
+    $api_key = reachbell_public_key();
+    if ($api_key === '') return;
 
     wp_enqueue_script(
         'reachbell-sdk',
