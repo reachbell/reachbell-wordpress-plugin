@@ -171,6 +171,14 @@ check('both fields report an error', $GLOBALS['rb_errors'], ['reachbell_api_key_
 reset_state(['reachbell_api_key' => LIVE_OLD], ['reachbell_secret_key' => ['rb_secret_array']]);
 reachbell_sanitize_public_key('rb_secret_pasted');
 check('an array in the Secret field counts as blank', get_option('reachbell_secret_key'), 'rb_secret_pasted');
+check('the array Secret field keeps the adopted secret', reachbell_sanitize_secret_key($_POST['reachbell_secret_key']), 'rb_secret_pasted');
+check('only the public field reports, no contradictory Secret error', $GLOBALS['rb_errors'], ['reachbell_api_key_invalid']);
+
+reset_state(['reachbell_secret_key' => 'rb_secret_saved']);
+check('an array secret keeps the saved secret', reachbell_sanitize_secret_key(['rb_secret_x']), 'rb_secret_saved');
+check('an array secret adds no error', $GLOBALS['rb_errors'], []);
+reset_state();
+check('an array secret with none saved stays blank', reachbell_sanitize_secret_key(['x']), '');
 
 // A saved public key that isn't valid (e.g. truncated by an older version)
 reset_state(['reachbell_api_key' => substr(LIVE, 0, 20)]);

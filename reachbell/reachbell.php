@@ -132,7 +132,7 @@ function reachbell_sanitize_public_key($value) {
         } elseif ($submitted_secret !== '') {
             // The Secret key field holds something that isn't a secret key, so
             // it is rejected too. Don't guess which key the admin meant.
-            $message = __('That is a secret key, so it was not saved in the public key field. The Secret key field did not hold a valid secret key either, so the saved secret key was not changed. Paste the secret key (rb_secret_...) into the Secret key field only; the public key field only takes keys starting with rb_live_.', 'reachbell');
+            $message = __('That is a secret key, so it was not saved in the public key field. The Secret key field did not hold a valid secret key either, so it was not saved: any secret key saved before is kept, and if none was saved, none is saved now. Paste the secret key (rb_secret_...) into the Secret key field only; the public key field only takes keys starting with rb_live_.', 'reachbell');
         } elseif (reachbell_adopt_secret_key($value)) {
             $message = __('That was your secret key, so it was saved in the Secret key field instead. The public key field only takes keys starting with rb_live_.', 'reachbell');
         } else {
@@ -213,7 +213,14 @@ function reachbell_dismiss_leaked_secret() {
 add_action('admin_post_reachbell_dismiss_leaked_secret', 'reachbell_dismiss_leaked_secret');
 
 function reachbell_sanitize_secret_key($value) {
-    $value = trim(sanitize_text_field((string) $value));
+    // A non-string (e.g. an array from a tampered form) is treated like a
+    // blank field: keep what is saved, with no error. Casting it would warn
+    // ("Array to string conversion") and report a contradictory error after
+    // the public key field may already have adopted a pasted secret.
+    if (!is_string($value)) {
+        return get_option('reachbell_secret_key', '');
+    }
+    $value = trim(sanitize_text_field($value));
     if ($value === '') {
         return get_option('reachbell_secret_key', '');
     }
