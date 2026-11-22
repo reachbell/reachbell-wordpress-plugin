@@ -156,7 +156,7 @@ add_action('admin_init', 'reachbell_move_misplaced_secret', 5);
 function reachbell_secret_in_public_field_notice() {
     if (!current_user_can('manage_options') || !get_option('reachbell_leaked_secret')) return;
     echo '<div class="notice notice-error"><p>' . esc_html__(
-        'ReachBell: your secret key was saved in the public key field, so it may have been visible in your pages\' source. It has been moved to the Secret key field. Rotate it in your ReachBell dashboard, save the new secret key in Settings → ReachBell, and paste your rb_live_ public key there too.',
+        'ReachBell: your secret key was saved in the public key field, so it may have been visible in your pages\' source. It has been taken out of that field (and saved as the Secret key if none was saved yet). Rotate it in your ReachBell dashboard, save the new secret key in Settings → ReachBell, and paste your rb_live_ public key there too.',
         'reachbell'
     ) . '</p></div>';
 }
