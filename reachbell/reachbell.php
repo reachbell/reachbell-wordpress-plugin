@@ -47,7 +47,7 @@ function reachbell_register_settings() {
     // later flow into wp_enqueue_script() or wp_remote_post().
     register_setting('reachbell', 'reachbell_api_key', [
         'type'              => 'string',
-        'sanitize_callback' => 'sanitize_text_field',
+        'sanitize_callback' => 'reachbell_sanitize_public_key',
         'default'           => '',
     ]);
     register_setting('reachbell', 'reachbell_auto_prompt', [
@@ -78,6 +78,40 @@ function reachbell_api_url() {
     $url = esc_url_raw($url, ['https', 'http']);
     return untrailingslashit($url ? $url : REACHBELL_DEFAULT_API_URL);
 }
+
+/**
+ * The public key is printed into every front-end page, so it must never be
+ * a secret key. Reject anything that isn't a publishable rb_live_ key.
+ */
+function reachbell_sanitize_public_key($value) {
+    $value = trim(sanitize_text_field((string) $value));
+    if ($value === '' || strpos($value, 'rb_live_') === 0) {
+        return $value;
+    }
+    $previous = (string) get_option('reachbell_api_key', '');
+    if (strpos($previous, 'rb_secret_') === 0) {
+        $previous = '';
+    }
+    $message = strpos($value, 'rb_secret_') === 0
+        ? __('That is your secret key. Paste it in the Secret key field below; the public key field only takes keys starting with rb_live_.', 'reachbell')
+        : __('The public key must start with rb_live_. The previous key was kept.', 'reachbell');
+    add_settings_error('reachbell_api_key', 'reachbell_api_key_invalid', $message);
+    return $previous;
+}
+
+/** True when the saved public key is unsafe to print (saved before validation existed). */
+function reachbell_public_key_is_secret() {
+    return strpos((string) get_option('reachbell_api_key', ''), 'rb_secret_') === 0;
+}
+
+function reachbell_secret_in_public_field_notice() {
+    if (!current_user_can('manage_options') || !reachbell_public_key_is_secret()) return;
+    echo '<div class="notice notice-error"><p>' . esc_html__(
+        'ReachBell: your secret key is saved in the public key field, so the ReachBell script is switched off on your site. Paste your rb_live_ public key there instead, then rotate the secret key in your ReachBell dashboard.',
+        'reachbell'
+    ) . '</p></div>';
+}
+add_action('admin_notices', 'reachbell_secret_in_public_field_notice');
 
 function reachbell_sanitize_secret_key($value) {
     $value = trim(sanitize_text_field((string) $value));
@@ -114,13 +148,13 @@ function reachbell_settings_page() {
             <?php settings_fields('reachbell'); ?>
             <table class="form-table">
                 <tr>
-                    <th><label for="reachbell_api_key"><?php esc_html_e('API Key', 'reachbell'); ?></label></th>
+                    <th><label for="reachbell_api_key"><?php esc_html_e('Public key', 'reachbell'); ?></label></th>
                     <td>
                         <input type="text" name="reachbell_api_key" id="reachbell_api_key"
                             value="<?php echo esc_attr(get_option('reachbell_api_key')); ?>"
                             class="regular-text" placeholder="rb_live_…" />
                         <p class="description">
-                            <?php esc_html_e('Find this in your ReachBell dashboard → Settings → API key.', 'reachbell'); ?>
+                            <?php esc_html_e('Starts with rb_live_. Find it in your ReachBell dashboard → Settings → API keys → Publishable key. This key is shown on your site, so never paste the secret key here.', 'reachbell'); ?>
                         </p>
                     </td>
                 </tr>
@@ -270,8 +304,9 @@ add_action('template_redirect', 'reachbell_serve_sw', 0);
  * and break the integration — both of which were the previous shape.
  */
 function reachbell_enqueue_sdk() {
-    $api_key = get_option('reachbell_api_key');
-    if (!$api_key) return;
+    $api_key = (string) get_option('reachbell_api_key');
+    // Never print a secret key into public HTML, even one saved before validation.
+    if ($api_key === '' || strpos($api_key, 'rb_secret_') === 0) return;
 
     wp_enqueue_script(
         'reachbell-sdk',
